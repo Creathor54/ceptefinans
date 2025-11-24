@@ -1,0 +1,8 @@
+{
+  "name": "Fiş Tara - Expense Tracker",
+  "description": "A smart expense tracker with receipt scanning powered by Gemini.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
