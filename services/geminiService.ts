@@ -1,6 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ReceiptData } from "../types";
 
+// Explicitly declare process for TypeScript build safety
+declare const process: {
+  env: {
+    API_KEY: string;
+  }
+};
+
 const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const modelId = "gemini-2.5-flash"; 
