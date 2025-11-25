@@ -1,13 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ReceiptData } from "../types";
 
-// Explicitly declare process for TypeScript build safety
-declare const process: {
-  env: {
-    API_KEY: string;
-  }
-};
-
+// Note: process.env.API_KEY is replaced by a string literal during the Vite build.
+// We do NOT declare 'process' here to avoid "process is not defined" runtime errors in the browser.
 const genAI = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const modelId = "gemini-2.5-flash"; 
