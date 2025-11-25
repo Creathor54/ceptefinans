@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import CameraScan from './components/CameraScan';
 import ConfirmReceipt from './components/ConfirmReceipt';
@@ -10,51 +10,67 @@ import Budgets from './components/Budgets';
 import PaymentPlan from './components/PaymentPlan';
 import Subscriptions from './components/Subscriptions';
 import Notifications from './components/Notifications';
-import Login from './components/Login';
 import EditProfile from './components/EditProfile';
 import ChangePassword from './components/ChangePassword';
-import { ExpenseProvider, useExpenses } from './context/ExpenseContext';
+import { ExpenseProvider } from './context/ExpenseContext';
 
-// Protected Route Wrapper
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useExpenses();
-  const location = useLocation();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  return <>{children}</>;
+const SplashScreen: React.FC = () => {
+  return (
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-white dark:bg-[#0B1120] z-[100]">
+      <div className="relative flex flex-col items-center animate-in fade-in zoom-in duration-700">
+        <div className="relative mb-6">
+           {/* Ambient Glow */}
+           <div className="absolute inset-0 bg-blue-500/20 rounded-3xl blur-xl animate-pulse"></div>
+           {/* CSS Logo */}
+           <div className="relative size-24 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/30 transform rotate-6 animate-[bounce_2s_infinite]">
+               <span className="material-symbols-outlined text-white text-5xl">account_balance_wallet</span>
+           </div>
+        </div>
+        <h1 className="text-4xl font-[900] tracking-tighter text-zinc-900 dark:text-white animate-pulse">
+            Cepte<span className="text-[#3B82F6]">Finans</span>
+        </h1>
+      </div>
+    </div>
+  );
 };
 
-const AppRoutes: React.FC = () => {
-    return (
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          {/* Protected Routes */}
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/scan" element={<ProtectedRoute><CameraScan /></ProtectedRoute>} />
-          <Route path="/confirm" element={<ProtectedRoute><ConfirmReceipt /></ProtectedRoute>} />
-          <Route path="/manual" element={<ProtectedRoute><ManualEntry /></ProtectedRoute>} />
-          <Route path="/categories" element={<ProtectedRoute><ManageCategories /></ProtectedRoute>} />
-          <Route path="/budgets" element={<ProtectedRoute><Budgets /></ProtectedRoute>} />
-          <Route path="/payment-plan" element={<ProtectedRoute><PaymentPlan /></ProtectedRoute>} />
-          <Route path="/subscriptions" element={<ProtectedRoute><Subscriptions /></ProtectedRoute>} />
-          <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-          <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
-          <Route path="/change-password" element={<ProtectedRoute><ChangePassword /></ProtectedRoute>} />
-          
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-    )
-}
+const AppContent: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLoading(false);
+    }, 2200); // Show splash for 2.2 seconds
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading) {
+    return <SplashScreen />;
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/scan" element={<CameraScan />} />
+      <Route path="/confirm" element={<ConfirmReceipt />} />
+      <Route path="/manual" element={<ManualEntry />} />
+      <Route path="/categories" element={<ManageCategories />} />
+      <Route path="/budgets" element={<Budgets />} />
+      <Route path="/payment-plan" element={<PaymentPlan />} />
+      <Route path="/subscriptions" element={<Subscriptions />} />
+      <Route path="/notifications" element={<Notifications />} />
+      <Route path="/edit-profile" element={<EditProfile />} />
+      <Route path="/change-password" element={<ChangePassword />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
 
 const App: React.FC = () => {
   return (
     <ExpenseProvider>
       <HashRouter>
-        <AppRoutes />
+        <AppContent />
       </HashRouter>
     </ExpenseProvider>
   );

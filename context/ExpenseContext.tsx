@@ -213,8 +213,12 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
 
   // Auth State
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Default to authenticated since we removed the login screen
+  const [user, setUser] = useState<User | null>(() => {
+      const saved = localStorage.getItem('user_session');
+      return saved ? JSON.parse(saved) : { name: 'Berk', surname: 'Yılmaz', email: 'berk@example.com', password: '', avatar: '' };
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState(true);
 
   // Theme State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -262,15 +266,6 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Check auth on load
-  useEffect(() => {
-      const storedUser = localStorage.getItem('user_session');
-      if (storedUser) {
-          setUser(JSON.parse(storedUser));
-          setIsAuthenticated(true);
-      }
-  }, []);
-
   // --- AUTOMATION & NOTIFICATIONS LOGIC ---
 
   useEffect(() => {
@@ -278,8 +273,6 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
       generateNotifications();
       // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expenses, budget, paymentPlans]); 
-  // We include subscriptions dependency in processSubscriptions internal logic to avoid infinite loops,
-  // but generating notifications relies on latest data.
 
   const processSubscriptions = () => {
     const today = new Date();
@@ -305,7 +298,6 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
                 currency: sub.currency
             };
             
-            // Avoid adding duplicates if already processed today (basic check by date/merchant/amount)
             const exists = expenses.some(e => 
                 e.merchant === sub.platform && 
                 e.total === sub.amount && 
@@ -313,13 +305,9 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
             );
 
             if (!exists) {
-                // We can't call setExpenses here directly in map without risk, 
-                // but since we update subs which triggers effect, we need to be careful.
-                // We'll queue the expense addition.
                 setExpenses(prev => [...prev, newExpense]);
             }
 
-            // Advance date
             const newNextDate = new Date(nextDate);
             if (sub.billingCycle === 'monthly') {
                 newNextDate.setMonth(newNextDate.getMonth() + 1);
@@ -327,7 +315,6 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
                 newNextDate.setFullYear(newNextDate.getFullYear() + 1);
             }
             
-            // Format YYYY-MM-DD
             const y = newNextDate.getFullYear();
             const m = String(newNextDate.getMonth() + 1).padStart(2, '0');
             const d = String(newNextDate.getDate()).padStart(2, '0');
@@ -369,13 +356,9 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     // 2. Check Payment Plans
     paymentPlans.forEach(plan => {
-        // Simple logic: Calculate next payment date based on start date
-        // This repeats logic from PaymentPlan component, ideally should be a shared helper.
-        // For brevity, let's assume monthly from startDate.
         const start = new Date(plan.startDate);
         const nextPayment = new Date(start);
         
-        // Find next future date
         while (nextPayment < today) {
             nextPayment.setMonth(nextPayment.getMonth() + 1);
         }
@@ -395,7 +378,6 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
 
     // 3. Budget Check
-    // Calculate current period spent (simplified for notification logic)
     const currentMonthExpenses = expenses.filter(e => {
         const d = new Date(e.date);
         return d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
@@ -423,12 +405,7 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
     }
     
-    // De-duplicate based on IDs or content to avoid spam
-    // In a real app we'd track 'seen' state better. Here we just replace notifications list
-    // but keep 'read' status if ID matches? 
-    // For MVP, simply setting them is fine, user will clear them.
     setNotifications(prev => {
-        // Merge new alerts with old read states if ID matches
         const merged = alerts.map(newAlert => {
             const existing = prev.find(p => p.id === newAlert.id);
             return existing ? existing : newAlert;
@@ -452,26 +429,20 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   const login = (email: string, pass: string) => {
-      if (email && pass) {
-          const demoUser: User = {
-              name: 'Berk',
-              surname: 'Yılmaz',
-              email: email,
-              password: pass,
-              avatar: ''
-          };
-          setUser(demoUser);
-          setIsAuthenticated(true);
-          localStorage.setItem('user_session', JSON.stringify(demoUser));
-          return true;
-      }
-      return false;
+      // Mock login always true
+      return true;
   };
 
   const logout = () => {
-      setUser(null);
-      setIsAuthenticated(false);
+      // Reset to default
+      localStorage.removeItem('expenses');
+      localStorage.removeItem('categories');
+      localStorage.removeItem('budget');
+      localStorage.removeItem('paymentPlans');
+      localStorage.removeItem('subscriptions');
+      localStorage.removeItem('theme');
       localStorage.removeItem('user_session');
+      // We don't set isAuthenticated to false because we removed the login screen
   };
 
   const updateUser = (updates: Partial<User>) => {
@@ -520,7 +491,6 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
     setPaymentPlans(prev => prev.map(plan => plan.id === id ? { ...plan, ...updates } : plan));
   };
 
-  // Subscriptions Actions
   const addSubscription = (sub: Subscription) => {
       setSubscriptions(prev => [...prev, sub]);
   };
@@ -531,8 +501,6 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
       setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
-  // --- DATA BACKUP / RESTORE ---
-  
   const exportData = () => {
     const data = {
         expenses,
@@ -565,7 +533,6 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
                 const json = e.target?.result as string;
                 const data = JSON.parse(json);
                 
-                // Basic validation
                 if (data.expenses && Array.isArray(data.expenses)) {
                     setExpenses(data.expenses);
                     setCategories(data.categories || INITIAL_CATEGORIES);
