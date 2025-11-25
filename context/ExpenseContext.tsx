@@ -447,8 +447,8 @@ export const ExpenseProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const updateUser = (updates: Partial<User>) => {
       setUser(prev => {
-          if (!prev) return null;
-          const updated = { ...prev, ...updates };
+          const current = prev || { name: '', surname: '', email: '', password: '', avatar: '' };
+          const updated = { ...current, ...updates };
           localStorage.setItem('user_session', JSON.stringify(updated));
           return updated;
       });

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useExpenses } from '../context/ExpenseContext';
 
@@ -7,14 +7,25 @@ const EditProfile: React.FC = () => {
   const navigate = useNavigate();
   const { user, updateUser } = useExpenses();
   
-  const [name, setName] = useState(user?.name || '');
-  const [surname, setSurname] = useState(user?.surname || '');
-  const [email, setEmail] = useState(user?.email || '');
+  const [name, setName] = useState('');
+  const [surname, setSurname] = useState('');
+  const [email, setEmail] = useState('');
+
+  useEffect(() => {
+      if (user) {
+          setName(user.name || '');
+          setSurname(user.surname || '');
+          setEmail(user.email || '');
+      }
+  }, [user]);
 
   const handleSave = () => {
     if (name && surname && email) {
         updateUser({ name, surname, email });
+        alert("Bilgiler başarıyla güncellendi!");
         navigate('/'); // Go back to dashboard/settings
+    } else {
+        alert("Lütfen tüm alanları doldurun.");
     }
   };
 
