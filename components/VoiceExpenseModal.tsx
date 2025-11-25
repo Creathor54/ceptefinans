@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useExpenses } from '../context/ExpenseContext';
 import { parseVoiceExpense } from '../services/geminiService';
@@ -21,7 +22,10 @@ const VoiceExpenseModal: React.FC<VoiceExpenseModalProps> = ({ isOpen, onClose }
   const [state, setState] = useState<'idle' | 'listening' | 'processing' | 'success' | 'error'>('idle');
   const [transcript, setTranscript] = useState('');
   const [parsedData, setParsedData] = useState<{ merchant: string; amount: number; category: string; date: string } | null>(null);
+  
+  // Use refs to keep track of latest values inside event callbacks without re-binding
   const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef('');
 
   useEffect(() => {
     if (isOpen) {
@@ -36,6 +40,7 @@ const VoiceExpenseModal: React.FC<VoiceExpenseModalProps> = ({ isOpen, onClose }
   const resetState = () => {
     setState('idle');
     setTranscript('');
+    transcriptRef.current = ''; // Reset ref too
     setParsedData(null);
   };
 
@@ -50,7 +55,7 @@ const VoiceExpenseModal: React.FC<VoiceExpenseModalProps> = ({ isOpen, onClose }
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'tr-TR';
-    recognition.continuous = false;
+    recognition.continuous = false; 
     recognition.interimResults = true;
 
     recognition.onstart = () => {
@@ -60,63 +65,51 @@ const VoiceExpenseModal: React.FC<VoiceExpenseModalProps> = ({ isOpen, onClose }
     recognition.onresult = (event: any) => {
       const current = event.resultIndex;
       const transcriptText = event.results[current][0].transcript;
+      
+      // Update both state (for UI) and ref (for logic)
       setTranscript(transcriptText);
+      transcriptRef.current = transcriptText;
     };
 
-    recognition.onend = async () => {
-        // Since we are setting state in onresult, we need to check the final transcript value
-        // However, state updates are async, so let's rely on the recognition stopping
-        // We handle the processing trigger in a separate effect or manually call it if we have text
-    };
-    
-    // Custom logic: Stop automatically after silence is handled by the browser engine usually,
-    // but we want to trigger processing when it stops.
-    recognition.onspeechend = () => {
-        recognition.stop();
+    recognition.onerror = (event: any) => {
+      console.error("Speech Error", event.error);
+      if (event.error === 'no-speech') {
+          // Ignore no-speech errors often caused by silence
+          return;
+      }
+      setState('error');
     };
 
-    // Override onend to process what we have
-    const originalOnEnd = recognition.onend;
     recognition.onend = () => {
-       if (originalOnEnd) originalOnEnd.call(recognition);
-       
-       // Use a timeout to allow the final transcript state to settle if needed, 
-       // though usually we want to grab the latest transcript
-       setTimeout(() => {
-           // We need to access the latest transcript. 
-           // Since we can't easily access the state inside this closure without refs,
-           // we'll trigger processing if we have a transcript.
-           // Actually, let's pass the transcript to a processing function.
-           // See handleProcessing below.
-       }, 100);
+        // When speech ends, check if we have text in the ref
+        const finalTranscript = transcriptRef.current;
+        
+        if (finalTranscript && finalTranscript.trim().length > 0) {
+            processVoiceCommand(finalTranscript);
+        } else {
+            // If we are still in listening state but stopped without text
+            if (state === 'listening') {
+                 setState('error');
+            }
+        }
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+        recognition.start();
+    } catch (e) {
+        console.error("Start failed", e);
+        setState('error');
+    }
   };
-
-  // Watch for transcript changes to know when to process? 
-  // No, better to wait for end. 
-  // Let's modify the flow: User speaks -> text updates -> silence -> processing.
-  
-  // Re-implementing simplified flow for better React integration
-  useEffect(() => {
-     if (recognitionRef.current) {
-         recognitionRef.current.onend = () => {
-             if (transcript.trim().length > 0) {
-                 processVoiceCommand(transcript);
-             } else {
-                 if (state === 'listening') { // If closed manually, don't show error
-                    setState('error'); // No speech detected
-                 }
-             }
-         };
-     }
-  }, [transcript, state]);
 
   const stopListening = () => {
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch(e) {
+          // ignore stop errors
+      }
     }
   };
 
@@ -173,8 +166,8 @@ const VoiceExpenseModal: React.FC<VoiceExpenseModalProps> = ({ isOpen, onClose }
                </div>
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Dinliyorum...</h3>
-            <p className="text-gray-500 dark:text-gray-400 text-sm min-h-[40px]">
-                {transcript || "Örn: 'Market alışverişi 250 TL'"}
+            <p className="text-gray-500 dark:text-gray-400 text-sm min-h-[40px] px-4">
+                {transcript || "Örn: 'Migros 350 TL'"}
             </p>
           </>
         )}
@@ -185,7 +178,7 @@ const VoiceExpenseModal: React.FC<VoiceExpenseModalProps> = ({ isOpen, onClose }
                 <div className="size-12 border-4 border-gray-200 border-t-primary rounded-full animate-spin"></div>
              </div>
              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">İşleniyor...</h3>
-             <p className="text-gray-500 dark:text-gray-400 text-sm">"{transcript}"</p>
+             <p className="text-gray-500 dark:text-gray-400 text-sm line-clamp-2 px-4">"{transcript}"</p>
           </>
         )}
 
@@ -196,35 +189,39 @@ const VoiceExpenseModal: React.FC<VoiceExpenseModalProps> = ({ isOpen, onClose }
              </div>
              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Anlaşılamadı</h3>
              <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">Sesli komut net duyulamadı veya işlenemedi.</p>
-             <button onClick={handleRetry} className="bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-white px-6 py-3 rounded-xl font-bold">Tekrar Dene</button>
+             <button onClick={handleRetry} className="bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-white px-6 py-3 rounded-xl font-bold transition hover:bg-gray-200 dark:hover:bg-zinc-700">Tekrar Dene</button>
            </>
         )}
 
         {state === 'success' && parsedData && (
-          <div className="w-full">
+          <div className="w-full animate-in zoom-in-95 duration-300">
              <div className="size-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-500 mx-auto mb-4">
                  <span className="material-symbols-outlined text-3xl">check</span>
              </div>
              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Bunu mu demek istedin?</h3>
              
-             <div className="bg-gray-50 dark:bg-zinc-800 rounded-xl p-4 mb-6 text-left space-y-3">
-                 <div className="flex justify-between">
-                     <span className="text-gray-500 text-sm">Mağaza/Açıklama</span>
+             <div className="bg-gray-50 dark:bg-zinc-800 rounded-xl p-4 mb-6 text-left space-y-3 border border-gray-100 dark:border-zinc-700">
+                 <div className="flex justify-between items-center">
+                     <span className="text-gray-500 text-sm font-medium">Mağaza</span>
                      <span className="font-bold text-gray-900 dark:text-white">{parsedData.merchant}</span>
                  </div>
-                 <div className="flex justify-between">
-                     <span className="text-gray-500 text-sm">Tutar</span>
-                     <span className="font-bold text-gray-900 dark:text-white text-lg">₺{parsedData.amount}</span>
+                 <div className="flex justify-between items-center">
+                     <span className="text-gray-500 text-sm font-medium">Tutar</span>
+                     <span className="font-bold text-gray-900 dark:text-white text-xl">₺{parsedData.amount}</span>
                  </div>
-                 <div className="flex justify-between">
-                     <span className="text-gray-500 text-sm">Kategori</span>
-                     <span className="font-medium text-primary bg-primary/10 px-2 py-0.5 rounded text-xs">{parsedData.category}</span>
+                 <div className="flex justify-between items-center">
+                     <span className="text-gray-500 text-sm font-medium">Kategori</span>
+                     <span className="font-medium text-primary bg-primary/10 px-3 py-1 rounded-lg text-xs">{parsedData.category}</span>
+                 </div>
+                 <div className="flex justify-between items-center">
+                     <span className="text-gray-500 text-sm font-medium">Tarih</span>
+                     <span className="text-gray-900 dark:text-white text-sm">{parsedData.date}</span>
                  </div>
              </div>
 
              <div className="flex gap-3">
-                 <button onClick={handleRetry} className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 font-bold text-sm">Vazgeç</button>
-                 <button onClick={handleConfirm} className="flex-1 py-3 rounded-xl bg-primary text-black font-bold text-sm shadow-lg shadow-primary/20">Onayla</button>
+                 <button onClick={handleRetry} className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-zinc-700 transition">Vazgeç</button>
+                 <button onClick={handleConfirm} className="flex-1 py-3 rounded-xl bg-primary text-black font-bold text-sm shadow-lg shadow-primary/20 hover:bg-primary/90 transition transform active:scale-95">Onayla</button>
              </div>
           </div>
         )}
